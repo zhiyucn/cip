@@ -7,6 +7,15 @@ from pathlib import Path
 import os
 import configparser
 
+# 颜色设置
+WHITE = '\033[0m'
+RED = '\033[31m'
+GREEN = '\033[32m'
+YELLOW = '\033[33m'
+BLUE = '\033[34m'
+BOLD = '\033[1m'
+SKYBLUE = '\033[36m'
+
 def setup_config():
     """
     配置 cip
@@ -16,7 +25,8 @@ def setup_config():
     if not config_path.exists():
         config_path.parent.mkdir(exist_ok=True)
         config['CONFIG'] = {
-            'lang': 'zh-CN'
+            'lang': 'zh-CN',
+            'python_dir': ''  # 添加用于存储Python路径的配置项
         }
         with open(config_path, 'w') as configfile:
             config.write(configfile)
@@ -27,17 +37,73 @@ def get_config(key):
     """
     config_path = Path("~/.cip/config.ini").expanduser()
     if not config_path.exists():
-        click.echo("Error: 配置文件不存在，请先配置。")
+        click.echo("{RED}{BOLD}ERROR:{WHITE} 配置文件不存在，请先配置。")
         return
     config = configparser.ConfigParser()
     config.read(config_path)
     if key not in config['CONFIG']:
         if config['CONFIG']['lang'] == 'zh-CN':
-            click.echo(f"Error: 配置项 {key} 不存在。")
+            click.echo(f"{RED}{BOLD}ERROR:{WHITE} 配置项 {key} 不存在。")
         else:
-            click.echo(f"Error: Config item {key} does not exist.")
+            click.echo(f"{RED}{BOLD}ERROR:{WHITE} Config item {key} does not exist.")
         return
     return config['CONFIG'][key]
+
+
+def find_python_path():
+    """
+    查找Python安装路径
+    """
+    def find_python_in_directory(directory):
+        paths = []
+        if os.name == 'nt':
+            for path in directory.glob("**/python.exe"):
+                click.echo(f"{BLUE}已找到{path.parent}中的Python:{WHITE}")
+                paths.append(str(path.parent))  # 返回Python安装目录
+        else:
+            for path in directory.glob("python*"):
+                click.echo(f"{BLUE}已找到{path.parent}中的Python:{WHITE}")
+                if path.is_file() and os.access(path, os.X_OK):
+                    paths.append(str(path.parent))  # 返回Python安装目录
+        return paths
+
+    # 首先尝试从默认安装路径中查找
+    if os.name == 'nt':
+        default_path = Path(os.path.expanduser("~")) / "AppData" / "Local" / "Programs" / "Python"
+    else:
+        default_path = Path("/usr/local/bin")
+
+    python_paths = find_python_in_directory(default_path)
+    
+    if python_paths:
+        # 如果找到多个路径，提示用户选择
+        if len(python_paths) > 1:
+            click.echo(f"{BLUE}找到多个Python安装路径，请选择一个:{WHITE}")
+            for idx, path in enumerate(python_paths, start=1):
+                click.echo(f"{idx}: {path} 版本：{path.split('\\')[-1]}")
+            choice = click.prompt("请输入选择的数字", type=int)
+            return python_paths[choice - 1]
+        else:
+            return python_paths[0]
+
+    # 如果默认路径未找到，提示用户手动输入路径
+    click.echo("未找到Python安装路径，请手动输入路径:")
+    python_dir = click.prompt("Python 安装目录", type=str)
+    custom_path = Path(python_dir)
+    custom_python_paths = find_python_in_directory(custom_path)
+    
+    if custom_python_paths:
+        if len(custom_python_paths) > 1:
+            click.echo(f"{BLUE}找到多个Python安装路径，请选择一个:{WHITE}")
+            for idx, path in enumerate(custom_python_paths, start=1):
+                click.echo(f"{idx}: {path} 版本：{path.split('\\')[-1]}")
+            choice = click.prompt("请输入选择的数字", type=int)
+            return custom_python_paths[choice - 1]
+        else:
+            return custom_python_paths[0]
+
+    click.echo("未找到有效的Python安装路径。")
+    return None
 
 
 class CPackTool:
@@ -53,7 +119,6 @@ class CPackTool:
         package_dirs = [Path(d) for d in package_dirs]
         for package_dir in package_dirs:
             if not (package_dir / "__init__.py").exists():
-                # 读取配置文件的lang
                 config = configparser.ConfigParser()
                 config_path = Path("~/.cip/config.ini").expanduser()
                 config.read(config_path)
@@ -78,8 +143,7 @@ class CPackTool:
             for package_dir in package_dirs:
                 for file in package_dir.rglob("*"):
                     if file.is_file():
-                        # 使用相对路径保留目录结构
-                        arcname = file.relative_to(package_dir.parent)  # 包含父目录，使得打包包含文件夹结构
+                        arcname = file.relative_to(package_dir.parent)
                         zipf.write(file, arcname=arcname)
 
         # 创建 .cpack 文件
@@ -94,26 +158,27 @@ class CPackTool:
         click.echo(f"Created {cpack_path}")
 
     @staticmethod
-    def install_cpack(cpack_path, python_dir):
+    def install_cpack(cpack_path):
         """
         安装 .cpack 包
         :param cpack_path: .cpack 文件路径
-        :param python_dir: Python 安装目录
         """
-        # 解压 .cpack 文件
         extract_dir = Path("extracted")
         extract_dir.mkdir(exist_ok=True)
 
         with zipfile.ZipFile(cpack_path, "r") as zipf:
             zipf.extractall(extract_dir)
 
-        # 读取 pack.json
         pack_json_path = extract_dir / "pack.json"
         with open(pack_json_path, "r") as f:
             pack_data = json.load(f)
 
-        # 提示用户确认安装每个包
+        # 查找Python路径
+        python_dir = find_python_path()
+        
+
         site_packages_dir = Path(python_dir) / "Lib" / "site-packages"
+        
         for package_name in pack_data["packages"]:
             config = configparser.ConfigParser()
             config_path = Path("~/.cip/config.ini").expanduser()
@@ -122,20 +187,16 @@ class CPackTool:
                 click.echo(f"准备安装包: {package_name}")
             else:
                 click.echo(f"Preparing to install package: {package_name}")
-            if config['CONFIG']['lang'] == 'zh-CN':
-                confirm = click.prompt("确认安装该包吗？(Y/n)", type=str)
-            else:
-                confirm = click.prompt("Do you want to install this package? (Y/n)", type=str)
 
+            # 确认安装
+            confirm = click.prompt("确认安装该包吗？(Y/n)", type=str)
             if confirm.lower() == 'y' or confirm.lower() == '':
                 pack_zip_path = extract_dir / "pack.zip"
-                # 仅解压包中的指定包
                 with zipfile.ZipFile(pack_zip_path, "r") as zipf:
                     for file in zipf.namelist():
                         if file.startswith(f"{package_name}/"):
                             zipf.extract(file, extract_dir)
 
-                # 移动包到 site-packages 目录
                 shutil.move(extract_dir / package_name, site_packages_dir / package_name)
                 if config['CONFIG']['lang'] == 'zh-CN':
                     click.echo(f"已安装 {package_name} 到 {site_packages_dir / package_name}")
@@ -146,7 +207,7 @@ class CPackTool:
                     click.echo(f"跳过安装包: {package_name}")
                 else:
                     click.echo(f"Skipping package: {package_name}")
-        # 清理临时文件
+
         shutil.rmtree(extract_dir)
         click.echo(f"安装完成!")
 
@@ -157,7 +218,9 @@ def cli():
 
     Warning: cip is mainly used in enterprise environments for unified version management, and is not suitable for beginners, and involves direct operations on Python directories, which may be reported by antivirus software as malware.
     
-    警告：cip 主要运用在企业等环境的统一版本管理，并不适合初学者使用，并且涉及对Python目录的直接操作，可能会被杀软误报。 """
+    警告：cip 主要运用在企业环境的统一版本管理，并不适合初学者使用，并且涉及对Python目录的直接操作，可能会被杀软误报。 
+    
+    Only speak to groups where Chinese is not the primary language. This program does not provide complete support for other languages, only Chinese has full language support."""
     pass
 
 @cli.command()
@@ -169,17 +232,16 @@ def create(package_name, version, package_dirs):
     try:
         CPackTool.create_cpack(package_name, version, package_dirs)
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        click.echo(f"{RED}{BOLD}ERROR:{WHITE} {e}", err=True)
 
 @cli.command()
 @click.argument("cpack_path", type=click.Path(exists=True))
-@click.option("--python-dir", type=click.Path(), default=sys.prefix, help="Python installation directory (default: current Python environment)")
-def install(cpack_path, python_dir):
+def install(cpack_path):
     """ 安装 .cpack 包 """
     try:
-        CPackTool.install_cpack(Path(cpack_path), Path(python_dir))
+        CPackTool.install_cpack(Path(cpack_path))
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        click.echo(f"{RED}{BOLD}ERROR:{WHITE} {e}", err=True)
 
 @cli.command()
 @click.argument("config_key")
@@ -189,7 +251,7 @@ def config(config_key, config_value=None):
     config = configparser.ConfigParser()
     config_path = Path("~/.cip/config.ini").expanduser()
     if not config_path.exists():
-        click.echo("Error: 配置文件不存在，请先配置。")
+        click.echo("{RED}{BOLD}ERROR:{WHITE} 配置文件不存在，请先配置。")
         return
     config.read(config_path)
     if config_value is None:
@@ -209,11 +271,11 @@ def config(config_key, config_value=None):
 @cli.command()
 def version():
     """ 显示 cip 版本 """
-    click.echo("cip 0.0.1 alpha")
+    click.echo("cip 0.0.2 alpha")
     config = configparser.ConfigParser()
     config_path = Path("~/.cip/config.ini").expanduser()
     if not config_path.exists():
-        click.echo("Error: 配置文件不存在，请先配置。")
+        click.echo("{RED}{BOLD}ERROR:{WHITE} 配置文件不存在，请先配置。")
         return
     config.read(config_path)
     if config['CONFIG']['lang'] == 'zh-CN':
@@ -226,6 +288,33 @@ def version():
         click.echo(f"Python version: {sys.version}")
         click.echo("License: MIT License")
         click.echo("View on Github: https://github.com/zhiyucn/cip")
+
+@cli.command()
+@click.argument("tool_name", required=False)
+def tools(tool_name):
+    """ 一些杂七杂八的工具 """
+    if tool_name == "find_python" or tool_name == "fpy":
+        click.echo(f"{BLUE}这个工具用于查找Python安装路径，以及用来查看你的电脑里有多少个Python。（作者的电脑里有10多个，几乎都是虚拟环境）{WHITE}")
+        find_python_path()
+    elif tool_name == "检测父母性别":
+        click.echo(f"{BLUE}这个工具用于检测父母性别。{WHITE}")
+        click.echo(f"{BLUE}请输入检测对象（填写父亲或母亲）：{WHITE}")
+        name = click.prompt("检测对象", type=str)
+        if name.lower() == "父亲":
+            click.echo(f"{BLUE}你的父亲是男的。{WHITE}")
+        elif name.lower() == "母亲":
+            click.echo(f"{BLUE}你的母亲是女的。{WHITE}")
+        else:
+            click.echo(f"{RED}{BOLD}ERROR:{WHITE} 未知的对象。")
+    elif tool_name == "help":
+        click.echo(f"{BLUE}小工具帮助：{WHITE}")
+        click.echo(f"{YELLOW}cip tools find_python{WHITE} - 查找Python安装路径")
+        click.echo(f"{YELLOW}cip tools fpy{WHITE} - 查找Python安装路径（别名）")
+        click.echo(f"{YELLOW}cip tools help{WHITE} - 显示工具帮助（此页面）")
+        click.echo(f"{YELLOW}cip tools 检测父母性别{WHITE} - 检测父母性别")
+    else:
+        click.echo(f"{RED}{BOLD}ERROR:{WHITE} 未知的工具 {tool_name}")
+        click.echo(f"{BLUE}我猜你可能需要输入{YELLOW} cip tools help{WHITE} 来查看工具帮助。")
 if __name__ == "__main__":
     setup_config()
     cli()
