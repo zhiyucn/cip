@@ -88,22 +88,37 @@ def find_python_path():
 
     # 如果默认路径未找到，提示用户手动输入路径
     click.echo("未找到Python安装路径，请手动输入路径:")
-    python_dir = click.prompt("Python 安装目录", type=str)
-    custom_path = Path(python_dir)
-    custom_python_paths = find_python_in_directory(custom_path)
+    python_dir = click.prompt("Python 安装目录 (输入 'All' 查找整个电脑)", type=str)
     
-    if custom_python_paths:
-        if len(custom_python_paths) > 1:
+    if python_dir.lower() == 'all':
+        # 查找整个电脑
+        if os.name == 'nt':
+            # Windows 系统
+            drives = [f"{d}:\\" for d in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" if os.path.exists(f"{d}:\\")]
+            for drive in drives:
+                drive_path = Path(drive)
+                python_paths.extend(find_python_in_directory(drive_path))
+        else:
+            # Unix/Linux 系统
+            root_path = Path("/")
+            python_paths.extend(find_python_in_directory(root_path))
+    else:
+        custom_path = Path(python_dir)
+        python_paths = find_python_in_directory(custom_path)
+    
+    if python_paths:
+        if len(python_paths) > 1:
             click.echo(f"{BLUE}找到多个Python安装路径，请选择一个:{WHITE}")
-            for idx, path in enumerate(custom_python_paths, start=1):
+            for idx, path in enumerate(python_paths, start=1):
                 click.echo(f"{idx}: {path} 版本：{path.split('\\')[-1]}")
             choice = click.prompt("请输入选择的数字", type=int)
-            return custom_python_paths[choice - 1]
+            return python_paths[choice - 1]
         else:
-            return custom_python_paths[0]
+            return python_paths[0]
 
     click.echo("未找到有效的Python安装路径。")
     return None
+
 
 
 class CPackTool:
@@ -294,7 +309,7 @@ def version():
 def tools(tool_name):
     """ 一些杂七杂八的工具 """
     if tool_name == "find_python" or tool_name == "fpy":
-        click.echo(f"{BLUE}这个工具用于查找Python安装路径，以及用来查看你的电脑里有多少个Python。（作者的电脑里有10多个，几乎都是虚拟环境）{WHITE}")
+        click.echo(f"{BLUE}这个工具用于查找Python安装路径，以及用来查看你的电脑里有多少个Python。（作者的电脑里有36个，几乎都是虚拟环境）{WHITE}")
         find_python_path()
     elif tool_name == "检测父母性别":
         click.echo(f"{BLUE}这个工具用于检测父母性别。{WHITE}")
@@ -312,9 +327,57 @@ def tools(tool_name):
         click.echo(f"{YELLOW}cip tools fpy{WHITE} - 查找Python安装路径（别名）")
         click.echo(f"{YELLOW}cip tools help{WHITE} - 显示工具帮助（此页面）")
         click.echo(f"{YELLOW}cip tools 检测父母性别{WHITE} - 检测父母性别")
+        click.echo(f"{YELLOW}cip tools setup_flask{WHITE} - 一键配置Flask项目")
+    elif tool_name == "setup_flask":
+        click.echo(f"{BLUE}正在配置Flask项目...{WHITE}")
+        setup_flask_project()
     else:
         click.echo(f"{RED}{BOLD}ERROR:{WHITE} 未知的工具 {tool_name}")
         click.echo(f"{BLUE}我猜你可能需要输入{YELLOW} cip tools help{WHITE} 来查看工具帮助。")
+
+def setup_flask_project():
+    """ 一键配置Flask项目 """
+    import os
+    import subprocess
+
+    # 创建项目目录
+    project_name = click.prompt("请输入项目名称", type=str)
+    os.makedirs(project_name, exist_ok=True)
+    os.chdir(project_name)
+
+    # 创建虚拟环境
+    click.echo(f"{BLUE}正在创建虚拟环境...{WHITE}")
+    subprocess.run(["python", "-m", "venv", "venv"])
+
+    # 激活虚拟环境并安装Flask
+    click.echo(f"{BLUE}正在安装Flask...{WHITE}")
+    if os.name == "nt":  # Windows
+        activate_script = os.path.join("venv", "Scripts", "activate")
+        subprocess.run([activate_script, "&&", "pip", "install", "flask"], shell=True)
+    else:  # Unix or MacOS
+        activate_script = os.path.join("venv", "bin", "activate")
+        subprocess.run(f"source {activate_script} && pip install flask", shell=True, executable="/bin/bash")
+
+    # 创建基本的Flask应用结构
+    click.echo(f"{BLUE}正在创建Flask应用结构...{WHITE}")
+    with open("app.py", "w") as f:
+        f.write("""from flask import Flask
+
+app = Flask(__name__)
+
+@app.route('/')
+def hello_world():
+    return 'Hello, World!'
+
+if __name__ == '__main__':
+    app.run(debug=True)
+""")
+
+    click.echo(f"{GREEN}Flask项目配置完成！{WHITE}")
+    click.echo(f"{BLUE}你可以通过以下命令启动项目：{WHITE}")
+    click.echo(f"{YELLOW}cd {project_name}{WHITE}")
+    click.echo(f"{YELLOW}python app.py{WHITE}")
+
 if __name__ == "__main__":
     setup_config()
     cli()
