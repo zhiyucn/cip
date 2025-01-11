@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 import os
 import configparser
+import subprocess
+import requests
 CIP_VERSION = "0.0.2 Alpha"
 # 颜色设置
 WHITE = '\033[0m'
@@ -15,6 +17,7 @@ YELLOW = '\033[33m'
 BLUE = '\033[34m'
 BOLD = '\033[1m'
 SKYBLUE = '\033[36m'
+
 
 
 def setup_config():
@@ -27,8 +30,9 @@ def setup_config():
         config_path.parent.mkdir(exist_ok=True)
         config['CONFIG'] = {
             'lang': 'zh-CN',
-            'web_url': 'https://cip.zhiyu.ink',
-        }
+            'web_url': 'http://cip.zhiyu.ink:5555',
+            # 这个web_url是cip镜像的地址，cip.zhiyu.ink:5555这个还没弄好
+            }
         with open(config_path, 'w') as configfile:
             config.write(configfile)
 
@@ -406,24 +410,69 @@ if __name__ == '__main__':
     click.echo(f"{YELLOW}python app.py{WHITE}")
 
 @cli.command()
+@click.argument("package_path")
+#@click.argument("version")
+def upload(package_path):
+    """ 上传 .cpack 包 """
+    package_name = package_path
+    filename = f"{package_name}"
+    version = filename.split("-")[-1]
+    file_path = os.path.join(filename)  # 根据需求设置文件路径
+    
+    # 检查文件是否存在
+    if not os.path.exists(file_path):
+        click.echo(f"ERROR: 文件 {file_path} 不存在。")
+        return
+    
+    # 上传文件
+    with open(file_path, 'rb') as f:
+        response = requests.post(f"{BASE_URL}/cip/upload", files={'file': f}, data={'package_name': package_name, 'package_version': version})
+        
+    if response.status_code == 200:
+        click.echo(f"成功上传 {filename}！")
+    else:
+        click.echo(f"ERROR: 上传失败：{response.json().get('error', '未知错误')}。")
+
+@cli.command()
 @click.argument("package_name")
 @click.argument("version")
 def download(package_name, version):
     """ 下载 .cpack 包 """
-    # 下载 .cpack 包
-    url = f"https://zhiyucn.github.io/cip/{package_name}/{version}/{package_name}-{version}.cpack"
-    print(url)
-    import requests
+    url = f"{BASE_URL}/download/{package_name}/{version}/{package_name}-{version}.cpack"
     response = requests.get(url)
+    
     if response.status_code == 200:
         with open(f"{package_name}-{version}.cpack", "wb") as f:
             f.write(response.content)
         click.echo(f"下载 {package_name}-{version}.cpack")
-        import subprocess
-        subprocess.run(["./cip", "install", f"{package_name}-{version}.cpack"])
+        
+        # 可选：运行安装命令
+        CPackTool.install_cpack(Path(f"{package_name}-{version}.cpack"))
     else:
-        click.echo(f"{RED}{BOLD}ERROR:{WHITE} 下载失败。")
+        click.echo(f"ERROR: 下载失败：{response.json().get('error', '未知错误')}。")
+
+@cli.command()
+@click.argument("url", required=False)
+def list(url=None):
+    """ 列出可用的 .cpack 包 """
+    if url is None:
+        response = requests.get(f"{BASE_URL}/cip/packages")
+    else:
+        response = requests.get(f"{url}/cip/packages")
+    if response.status_code == 200:
+        packages = response.json()
+        click.echo("可下载的包及版本：")
+        for package_name, versions in packages.items():
+            click.echo(f"{package_name}: {', '.join(versions)}")
+    else:
+        click.echo("ERROR: 获取包列表失败。")
+
 
 if __name__ == "__main__":
+
     setup_config()
+    config = configparser.ConfigParser()
+    config_path = Path("~/.cip/config.ini").expanduser()
+    BASE_URL = get_config("web_url")
+    #print(BASE_URL)
     cli()
