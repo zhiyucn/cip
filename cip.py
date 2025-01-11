@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 import os
 import configparser
-
+CIP_VERSION = "0.0.2 Alpha"
 # 颜色设置
 WHITE = '\033[0m'
 RED = '\033[31m'
@@ -15,6 +15,7 @@ YELLOW = '\033[33m'
 BLUE = '\033[34m'
 BOLD = '\033[1m'
 SKYBLUE = '\033[36m'
+
 
 def setup_config():
     """
@@ -26,7 +27,7 @@ def setup_config():
         config_path.parent.mkdir(exist_ok=True)
         config['CONFIG'] = {
             'lang': 'zh-CN',
-            'python_dir': ''  # 添加用于存储Python路径的配置项
+            'web_url': 'https://cip.zhiyu.ink',
         }
         with open(config_path, 'w') as configfile:
             config.write(configfile)
@@ -110,7 +111,14 @@ def find_python_path():
         if len(python_paths) > 1:
             click.echo(f"{BLUE}找到多个Python安装路径，请选择一个:{WHITE}")
             for idx, path in enumerate(python_paths, start=1):
-                click.echo(f"{idx}: {path} 版本：{path.split('\\')[-1]}")
+                # 计算版本
+                import subprocess
+                version = subprocess.run([str(os.path.join(path, "python")), "--version"], capture_output=True, text=True).stdout.strip()
+                if version.startswith("Python "):
+                    pass
+                else:
+                    version = "未激活的虚拟环境"
+                click.echo(f"{idx}: {path} 版本：{version}")
             choice = click.prompt("请输入选择的数字", type=int)
             return python_paths[choice - 1]
         else:
@@ -138,15 +146,16 @@ class CPackTool:
                 config_path = Path("~/.cip/config.ini").expanduser()
                 config.read(config_path)
                 if config['CONFIG']['lang'] == 'zh-CN':
-                    raise FileNotFoundError(f"目录 {package_dir} 不是有效的 Python 包（缺少 __init__.py）。")
+                    raise FileNotFoundError(f"{RED}{BOLD}目录 {package_dir} 不是有效的 Python 包（缺少 __init__.py）。{WHITE}")
                 else:
-                    raise FileNotFoundError(f"Directory {package_dir} is not a valid Python package (missing __init__.py).")
+                    raise FileNotFoundError(f"{RED}{BOLD}Directory {package_dir} is not a valid Python package (missing __init__.py).{WHITE}")
 
         # 创建 pack.json
         pack_data = {
             "name": package_name,
             "version": version,
-            "packages": [str(dir.name) for dir in package_dirs]
+            "packages": [str(dir.name) for dir in package_dirs],
+            "cip_version": CIP_VERSION
         }
         pack_json_path = Path(f"{package_name}-{version}.json")
         with open(pack_json_path, "w") as f:
@@ -198,6 +207,14 @@ class CPackTool:
             config = configparser.ConfigParser()
             config_path = Path("~/.cip/config.ini").expanduser()
             config.read(config_path)
+            click.echo(f"加载中...")
+            try:
+                if pack_data["cip_version"] == CIP_VERSION:
+                    pass
+                else:
+                    click.echo(f"{RED}{BOLD}警告:{WHITE} cip 版本不匹配，可能存在兼容性问题。")
+            except:
+                click.echo(f"{RED}{BOLD}警告:{WHITE} 未知的 cip 版本，可能存在兼容性问题。")
             if config['CONFIG']['lang'] == 'zh-CN':
                 click.echo(f"准备安装包: {package_name}")
             else:
@@ -286,7 +303,7 @@ def config(config_key, config_value=None):
 @cli.command()
 def version():
     """ 显示 cip 版本 """
-    click.echo("cip 0.0.2 alpha")
+    click.echo("cip "+ CIP_VERSION)
     config = configparser.ConfigParser()
     config_path = Path("~/.cip/config.ini").expanduser()
     if not config_path.exists():
@@ -331,6 +348,12 @@ def tools(tool_name):
     elif tool_name == "setup_flask":
         click.echo(f"{BLUE}正在配置Flask项目...{WHITE}")
         setup_flask_project()
+    elif tool_name is None:
+        click.echo(f"{YELLOW}cip tools find_python{WHITE} - 查找Python安装路径")
+        click.echo(f"{YELLOW}cip tools fpy{WHITE} - 查找Python安装路径（别名）")
+        click.echo(f"{YELLOW}cip tools help{WHITE} - 显示工具帮助（此页面）")
+        click.echo(f"{YELLOW}cip tools 检测父母性别{WHITE} - 检测父母性别")
+        click.echo(f"{YELLOW}cip tools setup_flask{WHITE} - 一键配置Flask项目")
     else:
         click.echo(f"{RED}{BOLD}ERROR:{WHITE} 未知的工具 {tool_name}")
         click.echo(f"{BLUE}我猜你可能需要输入{YELLOW} cip tools help{WHITE} 来查看工具帮助。")
@@ -340,10 +363,14 @@ def setup_flask_project():
     import os
     import subprocess
 
-    # 创建项目目录
+    # 选择项目路径
+    project_path = click.prompt("请输入项目路径（默认为当前目录）", type=str, default=os.getcwd())
     project_name = click.prompt("请输入项目名称", type=str)
-    os.makedirs(project_name, exist_ok=True)
-    os.chdir(project_name)
+
+    # 创建项目目录
+    full_project_path = os.path.join(project_path, project_name)
+    os.makedirs(full_project_path, exist_ok=True)
+    os.chdir(full_project_path)
 
     # 创建虚拟环境
     click.echo(f"{BLUE}正在创建虚拟环境...{WHITE}")
@@ -375,8 +402,27 @@ if __name__ == '__main__':
 
     click.echo(f"{GREEN}Flask项目配置完成！{WHITE}")
     click.echo(f"{BLUE}你可以通过以下命令启动项目：{WHITE}")
-    click.echo(f"{YELLOW}cd {project_name}{WHITE}")
+    click.echo(f"{YELLOW}cd {full_project_path}{WHITE}")
     click.echo(f"{YELLOW}python app.py{WHITE}")
+
+@cli.command()
+@click.argument("package_name")
+@click.argument("version")
+def download(package_name, version):
+    """ 下载 .cpack 包 """
+    # 下载 .cpack 包
+    url = f"https://zhiyucn.github.io/cip/{package_name}/{version}/{package_name}-{version}.cpack"
+    print(url)
+    import requests
+    response = requests.get(url)
+    if response.status_code == 200:
+        with open(f"{package_name}-{version}.cpack", "wb") as f:
+            f.write(response.content)
+        click.echo(f"下载 {package_name}-{version}.cpack")
+        import subprocess
+        subprocess.run(["./cip", "install", f"{package_name}-{version}.cpack"])
+    else:
+        click.echo(f"{RED}{BOLD}ERROR:{WHITE} 下载失败。")
 
 if __name__ == "__main__":
     setup_config()
