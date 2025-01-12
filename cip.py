@@ -222,6 +222,7 @@ class CPackTool:
         
 
         site_packages_dir = Path(python_dir) / "Lib" / "site-packages"
+        packages_dir = Path(python_dir) / "Lib"
         
         for package_name in pack_data["packages"]:
             config = configparser.ConfigParser()
@@ -247,13 +248,15 @@ class CPackTool:
                 with zipfile.ZipFile(pack_zip_path, "r") as zipf:
                     for file in zipf.namelist():
                         if file.startswith(f"{package_name}/"):
+                            
                             zipf.extract(file, extract_dir)
 
                 shutil.move(extract_dir / package_name, site_packages_dir / package_name)
+                shutil.move(extract_dir / package_name, packages_dir / package_name)
                 if config['CONFIG']['lang'] == 'zh-CN':
-                    click.echo(f"已安装 {package_name} 到 {site_packages_dir / package_name}")
+                    click.echo(f"已安装 {package_name} 到 {site_packages_dir / package_name} 和 {packages_dir / package_name}")
                 else:
-                    click.echo(f"Installed {package_name} to {site_packages_dir / package_name}")
+                    click.echo(f"Installed {package_name} to {site_packages_dir / package_name} and {packages_dir / package_name}")
             else:
                 if config['CONFIG']['lang'] == 'zh-CN':
                     click.echo(f"跳过安装包: {package_name}")
