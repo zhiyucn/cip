@@ -8,7 +8,7 @@ import os
 import configparser
 import subprocess
 import requests
-CIP_VERSION = "0.0.2 Alpha"
+CIP_VERSION = "0.0.3 Beta"
 # 颜色设置
 WHITE = '\033[0m'
 RED = '\033[31m'
@@ -30,11 +30,22 @@ def setup_config():
         config_path.parent.mkdir(exist_ok=True)
         config['CONFIG'] = {
             'lang': 'zh-CN',
-            'web_url': 'http://cip.zhiyu.ink:5555',
-            # 这个web_url是cip镜像的地址，cip.zhiyu.ink:5555这个还没弄好
+            'web_url': 'https://cip.zhiyuhub.top',
+            'version': CIP_VERSION
             }
         with open(config_path, 'w') as configfile:
             config.write(configfile)
+    try:
+        config = configparser.ConfigParser()
+        config.read(config_path)
+        if config['CONFIG']['version']!= CIP_VERSION:
+            click.echo(f"{RED}{BOLD}警告:{WHITE} 配置文件版本不是{CIP_VERSION}，可能存在兼容性问题。")
+            click.echo(f"请执行cip reset命令重新生成配置文件。")
+    except Exception as e:
+        click.echo(f"{RED}{BOLD}错误:{WHITE} 读取配置文件失败。")
+        click.echo(f"{RED}{BOLD}错误信息:{WHITE} {e}")
+        click.echo(f"请使用cip reset命令重新生成配置文件。")
+        #sys.exit(1)
 
 def get_config(key):
     """
@@ -467,6 +478,16 @@ def list(url=None):
     else:
         click.echo("ERROR: 获取包列表失败。")
 
+@cli.command()
+def reset():
+    """ 重置 cip 配置 """
+    config_path = Path("~/.cip/config.ini").expanduser()
+    if config_path.exists():
+        os.remove(config_path)
+        setup_config()
+        click.echo("已重置 cip 配置。")
+    else:
+        click.echo("ERROR: 配置文件不存在。")
 
 if __name__ == "__main__":
 
