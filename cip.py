@@ -456,7 +456,7 @@ def upload(package_path):
 def download(package_name, version):
     """ 下载 .cpack 包 """
     url = f"{BASE_URL}/download/{package_name}/{version}/{package_name}-{version}.cpack"
-    response = requests.get(url, verify=certifi.where())
+    response = requests.get(url, verify=False)
     
     if response.status_code == 200:
         with open(f"{package_name}-{version}.cpack", "wb") as f:
@@ -472,13 +472,14 @@ def download(package_name, version):
     elif response.status_code == 404:
         click.echo(f"ERROR: 未找到 {package_name} {version} 版本的包。")
     else:
-        click.echo(f"ERROR: 下载失败：{response.json().get('error', '未知错误')}。")
+        click.echo(f"ERROR: 下载失败")
 
 @cli.command()
 @click.argument("url", required=False)
 def list(url=None):
     """ 列出可用的 .cpack 包 """
     if url is None:
+        print(BASE_URL)
         response = requests.get(f"{BASE_URL}/cip/packages")
     else:
         response = requests.get(f"{url}/cip/packages")
@@ -507,5 +508,6 @@ if __name__ == "__main__":
     config = configparser.ConfigParser()
     config_path = Path("~/.cip/config.ini").expanduser()
     BASE_URL = get_config("web_url")
+    print(BASE_URL)
     #print(BASE_URL)
     cli()
