@@ -9,6 +9,7 @@ import os
 import configparser
 import subprocess
 import requests
+import certifi
 CIP_VERSION = "0.0.3"
 # 颜色设置
 WHITE = '\033[0m'
@@ -455,7 +456,7 @@ def upload(package_path):
 def download(package_name, version):
     """ 下载 .cpack 包 """
     url = f"{BASE_URL}/download/{package_name}/{version}/{package_name}-{version}.cpack"
-    response = requests.get(url, verify=False)
+    response = requests.get(url, verify=certifi.where())
     
     if response.status_code == 200:
         with open(f"{package_name}-{version}.cpack", "wb") as f:
