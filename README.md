@@ -166,7 +166,7 @@ cip list [url]
 如有任何问题或建议，可以通过以下方式联系项目维护者：
 
 - [GitHub Issues](https://github.com/zhiyucn/cip/issues) 🛠️
-- 邮件: contact@fitten.tech ✉️
+- 邮件: zhiyuxl@outlook.com ✉️
 
 ---
 
