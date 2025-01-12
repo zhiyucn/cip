@@ -1,10 +1,11 @@
+# 客户端代码
 import zipfile
 import json
 import shutil
 import click
 import sys
 from pathlib import Path
-import os
+import os                   
 import configparser
 import subprocess
 import requests
@@ -263,8 +264,8 @@ class CPackTool:
 
 @click.group()
 def cli():
-    """ cip - Better then pip.
-        cip - 比 pip 更好。
+    """ cip - An advanced package manager.
+        cip - 更高级的包管理器。
 
     Warning: cip is mainly used in enterprise environments for unified version management, and is not suitable for beginners, and involves direct operations on Python directories, which may be reported by antivirus software as malware.
     

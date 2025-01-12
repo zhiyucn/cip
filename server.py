@@ -1,3 +1,4 @@
+# 服务端代码，依赖flask库，用于接收上传的文件，并提供下载接口，你可以用它进行私有化部署，防止内部代码泄露。
 from flask import Flask, request, jsonify, send_file
 import os
 
