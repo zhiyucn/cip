@@ -135,7 +135,7 @@ def find_python_path():
                 if version.startswith("Python "):
                     pass
                 else:
-                    version = "未激活的虚拟环境"
+                    version = "未激活的虚拟环境或其他"
                 click.echo(f"{idx}: {path} 版本：{version}")
             choice = click.prompt("请输入选择的数字", type=int)
             return python_paths[choice - 1]
@@ -454,7 +454,7 @@ def upload(package_path):
 def download(package_name, version):
     """ 下载 .cpack 包 """
     url = f"{BASE_URL}/download/{package_name}/{version}/{package_name}-{version}.cpack"
-    response = requests.get(url)
+    response = requests.get(url, verify=False)
     
     if response.status_code == 200:
         with open(f"{package_name}-{version}.cpack", "wb") as f:
@@ -462,7 +462,13 @@ def download(package_name, version):
         click.echo(f"下载 {package_name}-{version}.cpack")
         
         # 可选：运行安装命令
-        CPackTool.install_cpack(Path(f"{package_name}-{version}.cpack"))
+        yes = click.prompt("是否立即安装？(Y/n)", type=str)
+        if yes.lower() == 'y' or yes.lower() == '':
+            CPackTool.install_cpack(Path(f"{package_name}-{version}.cpack"))
+        else:
+            pass
+    elif response.status_code == 404:
+        click.echo(f"ERROR: 未找到 {package_name} {version} 版本的包。")
     else:
         click.echo(f"ERROR: 下载失败：{response.json().get('error', '未知错误')}。")
 

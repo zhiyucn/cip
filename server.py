@@ -43,7 +43,13 @@ def upload_file():
 def download_file(package_name, version, filename):
     file_path = os.path.join(UPLOAD_FOLDER, filename)
     if os.path.exists(file_path):
-        return send_file(file_path, as_attachment=True)
+        if version == filename.split('-')[1]:
+            if package_name == filename.split('-')[0]:
+                return send_file(file_path, as_attachment=True)
+            else:
+                return jsonify({'error': '文件不存在'}), 400
+        else:
+            return jsonify({'error': '文件不存在'}), 400
     else:
         return jsonify({'error': '文件不存在'}), 404
 
