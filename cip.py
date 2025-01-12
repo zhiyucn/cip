@@ -8,7 +8,7 @@ import os
 import configparser
 import subprocess
 import requests
-CIP_VERSION = "0.0.3 Beta"
+CIP_VERSION = "0.0.3"
 # 颜色设置
 WHITE = '\033[0m'
 RED = '\033[31m'
@@ -40,7 +40,10 @@ def setup_config():
         config.read(config_path)
         if config['CONFIG']['version']!= CIP_VERSION:
             click.echo(f"{RED}{BOLD}警告:{WHITE} 配置文件版本不是{CIP_VERSION}，可能存在兼容性问题。")
-            click.echo(f"请执行cip reset命令重新生成配置文件。")
+            # 修改配置文件版本
+            config['CONFIG']['version'] = CIP_VERSION
+            with open(config_path, 'w') as configfile:
+                config.write(configfile)
     except Exception as e:
         click.echo(f"{RED}{BOLD}错误:{WHITE} 读取配置文件失败。")
         click.echo(f"{RED}{BOLD}错误信息:{WHITE} {e}")
@@ -437,7 +440,8 @@ def upload(package_path):
     
     # 上传文件
     with open(file_path, 'rb') as f:
-        response = requests.post(f"{BASE_URL}/cip/upload", files={'file': f}, data={'package_name': package_name, 'package_version': version})
+        # 跳过SSL验证
+        response = requests.post(f"{BASE_URL}/cip/upload", files={'file': f}, data={'package_name': package_name, 'package_version': version},verify=False)
         
     if response.status_code == 200:
         click.echo(f"成功上传 {filename}！")
