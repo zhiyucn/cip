@@ -10,7 +10,7 @@ import configparser
 import subprocess
 import requests
 import certifi
-CIP_VERSION = "0.0.3"
+CIP_VERSION = "0.0.4 beta"
 # 颜色设置
 WHITE = '\033[0m'
 RED = '\033[31m'

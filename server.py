@@ -12,10 +12,20 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 packages = {}
 for file in os.listdir(UPLOAD_FOLDER):
     if os.path.isfile(os.path.join(UPLOAD_FOLDER, file)):
-        package_name, package_version = file.split('-')
-        if package_name not in packages:
-            packages[package_name] = []
-        packages[package_name].append(f"{file}")
+        # 假设文件名格式为 "package_name-version.cpack"
+        try:
+            # 分割文件名
+            parts = file.split('-')
+            package_name = parts[0]
+            
+            # 存储完整的文件名
+            if package_name not in packages:
+                packages[package_name] = []
+            if file not in packages[package_name]:
+                packages[package_name].append(file)
+        except (ValueError, IndexError):
+            # 如果文件名格式不符合预期，跳过该文件
+            continue
 
 @app.route('/cip/upload', methods=['POST'])
 def upload_file():
@@ -36,7 +46,8 @@ def upload_file():
     # 更新包列表
     if package_name not in packages:
         packages[package_name] = []
-    packages[package_name].append(package_version)
+    if file.filename not in packages[package_name]:
+        packages[package_name].append(file.filename)
 
     return jsonify({'message': '文件上传成功'}), 200
 
@@ -44,7 +55,7 @@ def upload_file():
 def download_file(package_name, version, filename):
     file_path = os.path.join(UPLOAD_FOLDER, filename)
     if os.path.exists(file_path):
-        if version == filename.split('-')[1]:
+        if version == filename.split('-')[1].split('.cpack')[0]:
             if package_name == filename.split('-')[0]:
                 return send_file(file_path, as_attachment=True)
             else:
